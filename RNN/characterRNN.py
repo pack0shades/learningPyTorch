@@ -12,7 +12,7 @@ print(DEVICE)
 
 text_portion_size = 200
 
-num_iter = 5000
+num_iter = 50000
 learning_rate = 0.00001
 embed_size = 100
 hidden_size = 128
@@ -162,7 +162,7 @@ for iteration in range(num_iter):
         if iteration % 200 == 0:
             print(f'Time elapsed: {(time.time() - start_time) / 60:.2f} min')
             print(f'Iteration {iteration} | Loss {loss.item():.2f}\n\n')
-            print(evaluate(model, 'Th', 200), '\n')
+            print(evaluate(model, '. ', 200), '\n')
             print(50 * '=')
 
             loss_list.append(loss.item())
