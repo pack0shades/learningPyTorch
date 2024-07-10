@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, Dataset
 nlp = spacy.load("en_core_web_sm")
 
 
-def save_checkpoint(state, filename):
+def save_checkpoint(state, filename='check.pth.tar'):
     print('saving checkpoint...\n')
     torch.save(state, filename)
     print('CHECKPOINT SAVED!!!!')
