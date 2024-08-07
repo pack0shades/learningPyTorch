@@ -5,14 +5,24 @@ from helper_autoencoder import Dataloader_catdog
 from tqdm import tqdm
 from helper_autoencoder import plot_generated_images
 import matplotlib as plt
+from torchvision import transforms, datasets
+from helper_autoencoder import show_image
+
 device = "cuda" if torch.cuda.is_available() else 'cpu'
 print(device)
 
+data_transform = transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(),
+        ])
+
 learning_rate = 0.001
-epochs = 10
+epochs = 100
 batch_size = 64
 latent_dim = 2
 train_loader, test_loader = Dataloader_catdog(batch_size=batch_size, data_transform=None)
+
+dataset = datasets.ImageFolder(root='dataset/dog vs cat/dataset/test_set', transform=data_transform)
 
 # checking dataset
 print('Training Set:\n')
@@ -142,4 +152,40 @@ def test(model, loader):
 train(vae, optimizer, epochs, train_loader)
 test(vae, test_loader)
 
-plot_generated_images(test_loader, model=vae, device=device, modeltype="VAE")
+#plot_generated_images(test_loader, model=vae, device=device, modeltype="VAE")
+
+def examples(animal, num_examples=3):
+    images = []
+    labels = []
+    idx = 0
+    for x, y in train_loader:
+        for i in range(x.size(0)):
+
+            if y[i].item() == animal:
+               images.append(x[i])
+               labels.append(y[i])
+               idx += 1
+            if idx>= 1:
+                break
+            if len(images) == 0:
+                print("no given class labels found")
+                return
+
+        with torch.no_grad():
+            images = torch.stack(images).to(device)
+            mu, sigma = vae.encoder(images)
+
+        mu = mu[0]
+        sigma = sigma[0]
+
+        for dudu in range(num_examples):
+            epsilon = torch.randn_like(sigma)
+            z = mu + sigma*epsilon
+            out = vae.decoder(z)
+            out = out.view(3, 64, 64)
+            show_image(out)
+
+
+examples(0, num_examples=5)
+examples(1, num_examples=5)
+

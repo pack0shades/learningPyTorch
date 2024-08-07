@@ -141,3 +141,11 @@ def plot_generated_images(data_loader, model, device,
                 ax[i].imshow(curr_img)
             else:
                 ax[i].imshow(curr_img.view((image_height, image_width)), cmap='binary')
+
+
+def show_image(img):
+    img = img.cpu().detach().numpy()
+    img = img.transpose(1, 2, 0)  # Convert from CHW to HWC
+    plt.imshow(img)
+    plt.axis('off')
+    plt.show()
