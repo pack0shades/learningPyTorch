@@ -27,7 +27,7 @@ def Dataloader_catdog(batch_size, data_transform=None):
     test_dataset = datasets.ImageFolder(root='dataset/dog vs cat/dataset/test_set', transform=data_transform)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 
     return train_loader,test_loader
@@ -123,7 +123,7 @@ def plot_generated_images(data_loader, model, device,
             if modeltype == 'autoencoder':
                 decoded_images = model(features)[:n_images]
             elif modeltype == 'VAE':
-                encoded, z_mean, z_log_var, decoded_images = model(features)[:n_images]
+                encoder, z_mean, z_log_var, decoded_images = model(features)[:n_images]
             else:
                 raise ValueError('`modeltype` not supported')
 
