@@ -1,6 +1,10 @@
-## ResNet without using dropout with CIFAR10 datset accuracy was around 75%
-
-
+## Dataset used: CIFAR10 (https://www.cs.toronto.edu/~kriz/cifar.html)
+## Backbone Resnet: ResNet-50 
+## 
+## ResNet without using dropout train acc. = 94.85% and test acc. = 87.32%
+## ResNet with dropout in every residual block train acc. = 94.11% and test acc. = 85.32%
+## ResNet with dropout after fourth layer train acc. = 96.18% and test acc. = 86.32%
+## ReNet with just before the FC layer in the end train acc. = 91.18% and test acc. = 89.32%
 
 
 import torch
@@ -40,6 +44,38 @@ class ResNetblock(nn.Module):
         x = self.relu(x)
         x = self.conv2(x)
         x = self.bn2(x)
+        x = self.relu(x)
+        x = self.conv3(x)
+        x = self.bn3(x)
+        if self.identity_downsample is not None:
+            residual = self.identity_downsample(residual)
+        x += residual
+        x = self.relu(x)
+        return x
+    
+    
+class ResNetblockdrop(nn.Module):
+    def __init__(self, in_channels, intermediate_channels, identity_downsample=None,stride=1):
+        super(ResNetblockdrop, self).__init__()
+        self.expansion = expansion
+        self.stride = stride
+        self.conv1 = nn.Conv2d(in_channels, intermediate_channels, kernel_size=1)
+        self.bn1 = nn.BatchNorm2d(intermediate_channels)
+        self.conv2 = nn.Conv2d(intermediate_channels, intermediate_channels, kernel_size=3, stride=stride, padding=1)
+        self.bn2 = nn.BatchNorm2d(intermediate_channels)
+        self.dropout = nn.Dropout(0.3)
+        self.conv3 = nn.Conv2d(intermediate_channels, intermediate_channels*self.expansion, kernel_size=1)
+        self.bn3 = nn.BatchNorm2d(intermediate_channels*self.expansion)
+        self.relu = nn.ReLU(inplace=True)
+        self.identity_downsample = identity_downsample
+
+    def forward(self, x):
+        residual = x
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.dropout(self.bn2(x))
         x = self.relu(x)
         x = self.conv3(x)
         x = self.bn3(x)
@@ -95,8 +131,114 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
 
+class ResNetdrop(nn.Module):
+    def __init__(self, block, layers, image_channels, num_classes):
+        super(ResNetdrop, self).__init__()
+        self.in_channels = 64
+        self.conv1 = nn.Conv2d(image_channels, 64, kernel_size=7, stride=2, padding=3)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.layer1 = self._make_layer(block, 64, layers[0], stride=1)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512*4, num_classes)
+        self.dropout = nn.Dropout(0.5)
+        
+    
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.dropout(self.layer4(x))
+        x = self.avgpool(x)
+        x = x.reshape(x.shape[0], -1)
+        x = self.fc(x)
+        
+        return x
+    
+    
+    def _make_layer(self, block, intermediate_channels, num_residual_blocks, stride):
+        identity_downsample = None
+        layers = []
+        
+        if stride!= 1 or self.in_channels != intermediate_channels*4:
+            identity_downsample = nn.Sequential(nn.Conv2d(self.in_channels, intermediate_channels*4, kernel_size=1, stride=stride), nn.BatchNorm2d(intermediate_channels*4))
+            
+        layers.append(block(self.in_channels, intermediate_channels, identity_downsample,stride))
+        self.in_channels = intermediate_channels * 4
+
+        for i in range(num_residual_blocks-1):
+            layers.append(block(self.in_channels, intermediate_channels))
+            #self.in_channels = intermediate_channels * 4
+        return nn.Sequential(*layers)
+
+
+
+class ResNetdroplast(nn.Module):
+    def __init__(self, block, layers, image_channels, num_classes):
+        super(ResNetdroplast, self).__init__()
+        self.in_channels = 64
+        self.conv1 = nn.Conv2d(image_channels, 64, kernel_size=7, stride=2, padding=3)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.layer1 = self._make_layer(block, 64, layers[0], stride=1)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512*4, num_classes)
+        self.dropout = nn.Dropout(0.3)
+        
+    
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
+        x = self.dropout(x.reshape(x.shape[0], -1))
+        x = self.fc(x)
+        
+        return x
+    
+    def _make_layer(self, block, intermediate_channels, num_residual_blocks, stride):
+        identity_downsample = None
+        layers = []
+        
+        if stride!= 1 or self.in_channels != intermediate_channels*4:
+            identity_downsample = nn.Sequential(nn.Conv2d(self.in_channels, intermediate_channels*4, kernel_size=1, stride=stride), nn.BatchNorm2d(intermediate_channels*4))
+            
+        layers.append(block(self.in_channels, intermediate_channels, identity_downsample,stride))
+        self.in_channels = intermediate_channels * 4
+
+        for i in range(num_residual_blocks-1):
+            layers.append(block(self.in_channels, intermediate_channels))
+            #self.in_channels = intermediate_channels * 4
+        return nn.Sequential(*layers)
 def resnet50(image_channels=3, num_classes=1000):
     return ResNet(ResNetblock, [3, 4, 6, 3], image_channels, num_classes)
+
+def resnet50droplayer(image_channels=3, num_classes=1000):
+    return ResNetdrop(ResNetblock, [3, 4, 6, 3], image_channels, num_classes)
+
+def resnet50dropblock(image_channels=3, num_classes=1000):
+    return ResNet(ResNetblockdrop, [3, 4, 6, 3], image_channels, num_classes)
+
+def resnet50droplast(image_channels=3, num_classes=1000):
+    return ResNetdroplast(ResNetblock, [3, 4, 6, 3], image_channels, num_classes)
+
 
 def test():
     net = resnet50()
@@ -128,7 +270,7 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=128, shuffle=False, num_
 
 
 criterion = nn.CrossEntropyLoss()
-model = ResNet(ResNetblock, [3, 4, 6, 3], image_channels=3, num_classes=10).to(device)
+model = resnet50droplast(image_channels=3, num_classes=10).to(device)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Function to calculate accuracy
@@ -173,8 +315,7 @@ for epoch in range(num_epochs):
         running_loss += loss.item()
 
         time_elapsed = (time.time() - starttime) / 60
-        if batch_idx % 10 == 0:
-            print(f'Batch {batch_idx+1}/{len(train_loader)}, Loss: {loss.item():.4f}, Time Elapsed: {time_elapsed:.2f} mins')
+
 
     avg_loss = running_loss / len(train_loader)
     epoch_runtime = (time.time() - epoch_starttime) / 60
