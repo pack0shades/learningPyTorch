@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
-import torchsummary as summary
+from torchsummary import summary
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
@@ -311,6 +311,7 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=128, shuffle=False, num_
 
 criterion = nn.CrossEntropyLoss()
 model = resnet50dropblock2d(image_channels=3, num_classes=10).to(device)
+summary(model, (3, 32, 32), device='cuda')
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Function to calculate accuracy
