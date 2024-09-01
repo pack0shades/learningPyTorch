@@ -4,8 +4,8 @@
 ## ResNet without using dropout train acc. = 94.85% and test acc. = 87.32%
 ## ResNet with dropout in every residual block train acc. = 94.11% and test acc. = 85.32%
 ## ResNet with dropout after fourth layer train acc. = 96.18% and test acc. = 86.32%
-## ReNet with just before the FC layer in the end train acc. = 91.18% and test acc. = 89.32%
-
+## ResNet with just before the FC layer in the end train acc. = 91.18% and test acc. = 89.32%
+## ResNet with dropblock in every residual block train acc. = 95.11% and test acc. = 89.58%
 
 import torch
 import torch.nn as nn
@@ -16,6 +16,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 import time
+from torchvision.ops import DropBlock2d as DropBlock2D
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
@@ -77,6 +78,42 @@ class ResNetblockdrop(nn.Module):
         x = self.conv2(x)
         x = self.dropout(self.bn2(x))
         x = self.relu(x)
+        x = self.conv3(x)
+        x = self.bn3(x)
+        if self.identity_downsample is not None:
+            residual = self.identity_downsample(residual)
+        x += residual
+        x = self.relu(x)
+        return x
+    
+    
+class ResNetblockblockdrop2d(nn.Module):
+
+    def __init__(self, in_channels, intermediate_channels, identity_downsample=None, stride=1, dropblock_prob=0.1):
+        super(ResNetblockblockdrop2d, self).__init__()
+        self.stride = stride
+        self.dropblock = DropBlock2D(block_size=1, p=dropblock_prob)
+        self.expansion = expansion
+        self.conv1 = nn.Conv2d(in_channels, intermediate_channels, kernel_size=1)
+        self.bn1 = nn.BatchNorm2d(intermediate_channels)
+        self.conv2 = nn.Conv2d(intermediate_channels, intermediate_channels, kernel_size=3, stride=stride, padding=1)
+        self.bn2 = nn.BatchNorm2d(intermediate_channels)
+        self.conv3 = nn.Conv2d(intermediate_channels, intermediate_channels * self.expansion, kernel_size=1)
+        self.bn3 = nn.BatchNorm2d(intermediate_channels * self.expansion)
+        self.relu = nn.ReLU(inplace=True)
+        self.identity_downsample = identity_downsample
+
+    def forward(self, x):
+        residual = x
+        #print(f"residual {residual.shape}")
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.dropblock(x)
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+        x = self.dropblock(x)
         x = self.conv3(x)
         x = self.bn3(x)
         if self.identity_downsample is not None:
@@ -239,6 +276,9 @@ def resnet50dropblock(image_channels=3, num_classes=1000):
 def resnet50droplast(image_channels=3, num_classes=1000):
     return ResNetdroplast(ResNetblock, [3, 4, 6, 3], image_channels, num_classes)
 
+def resnet50dropblock2d(image_channels=3, num_classes=1000):
+    return ResNet(ResNetblockblockdrop2d, [3, 4, 6, 3], image_channels, num_classes)
+
 
 def test():
     net = resnet50()
@@ -270,7 +310,7 @@ val_loader = DataLoader(dataset=val_dataset, batch_size=128, shuffle=False, num_
 
 
 criterion = nn.CrossEntropyLoss()
-model = resnet50droplast(image_channels=3, num_classes=10).to(device)
+model = resnet50dropblock2d(image_channels=3, num_classes=10).to(device)
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
 # Function to calculate accuracy
